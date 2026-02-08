@@ -16,7 +16,7 @@ Uncomment the module you want to run below.
 # from src.w1d4_tokenizing import run  # Tokenizing practice
 # from src.w1d4_memory import run  # Memory/conversation practice
 # from src.w1d4_brochure_generator import run  # Brochure generator practice
-from src.w2d1 import *
+from week1.w2d1 import *
 
 def main():
     print("=" * 50)
