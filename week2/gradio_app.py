@@ -29,10 +29,16 @@ def message_chat(prompt):
     )
     return response.text
 
+def shout(text):
+    print(f"Shout has been called with input: {text}")
+    return text.upper()
 
 def run():
-    result = message_chat("What are some best practices for prompt engineering?")
-    print(result)
+    print(shout('test'))
+    
+    gr.Interface(fn=shout, inputs="textbox", outputs="textbox", flagging_mode="never").launch()
+    # result = message_chat("What are some best practices for prompt engineering?")
+    # print(result)
  
 
 
