@@ -1,17 +1,20 @@
 [project]
 name = "llm-engineering-practice"
 version = "0.1.0"
-description = "Add your description here"
+description = "Hands-on practice with LLM engineering concepts — prompting, tokenization, memory, agents, and more."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
-    "bs4>=0.0.2",
+    "beautifulsoup4>=4.12.0",
     "google-genai>=1.0.0",
+    "gradio>=4.0.0",
+    "huggingface-hub>=0.19.3",
     "ipython>=8.18.1",
-    "openai>=2.16.0",
-    "python-dotenv>=1.2.1",
-    "scraper>=0.1.0",
-    "tiktoken>=0.12.0",
+    "litellm>=1.0.0",
+    "openai>=1.16.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "tiktoken>=0.7.0",
 ]
 
 [project.scripts]
