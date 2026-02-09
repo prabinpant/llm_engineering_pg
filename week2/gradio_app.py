@@ -16,14 +16,24 @@ def chat(message, history):
     )
     return response.text
 
+system_message = "You are a helpful assistant that answers questions about LLM engineering."
+
+
+def message_chat(prompt):
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+        config=genai.types.GenerateContentConfig(
+            system_instruction=system_message,
+        ),
+    )
+    return response.text
+
 
 def run():
-    demo = gr.ChatInterface(
-        fn=chat,
-        title="Gemini Chat",
-        description="Chat with Google Gemini",
-    )
-    demo.launch()
+    result = message_chat("What are some best practices for prompt engineering?")
+    print(result)
+ 
 
 
 if __name__ == "__main__":
