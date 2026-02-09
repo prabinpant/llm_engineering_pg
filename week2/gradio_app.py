@@ -36,9 +36,13 @@ def shout(text):
 def run():
     print(shout('test'))
     
-    gr.Interface(fn=shout, inputs="textbox", outputs="textbox", flagging_mode="never").launch()
+    message_input = gr.Textbox(label="Your message", info="Enter your prompt", lines=8)
+    message_output = gr.Markdown(label="Assistant")
+    
+    view = gr.Interface(fn=message_chat, inputs=message_input, outputs=message_output, examples=["kowa lowa zowa"], flagging_mode="never")
+    view.launch()
     # result = message_chat("What are some best practices for prompt engineering?")
-    # print(result)
+    # print(result) 
  
 
 
