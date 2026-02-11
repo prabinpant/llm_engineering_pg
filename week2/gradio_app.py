@@ -1,64 +1,80 @@
-"""Week 2 - Gradio Chat App with Google Gemini"""
+"""Week 2 - Gradio Chat App with Google Gemini (OpenAI client)"""
+import json
 import os
 from dotenv import load_dotenv
 import gradio as gr
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+MODEL = "gemini-2.5-flash"
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
-system_message = "You are a helpful assistant for an Airline clled FlightAI. Give short, courteous answers, no more than 1 sentence. Always be accurate. If you dont know the answer, say so."
+client = OpenAI(
+    api_key=os.getenv("GOOGLE_API_KEY"),
+    base_url=GEMINI_BASE_URL,
+)
+
+system_message = "You are a helpful assistant for an Airline called FlightAI. Give short, courteous answers, no more than 1 sentence. Always be accurate. If you dont know the answer, say so."
 
 ticket_prices = {"New York": 200, "Los Angeles": 300, "Chicago": 250, "Houston": 225, "Miami": 350}
+
 
 def get_ticket_price(city):
     print(f"Getting ticket price for {city}")
     return ticket_prices.get(city, "Unknown city")
 
+
 price_function = {
-    "name" : "get_ticket_price",
-    "description" : "Get the ticket price for a given city",
-    "parameters" : {
-        "type" : "object",
-        "properties" : {
-            "destination_city" : {"type": "string", "description": "The city to get the ticket price for"}
+    "name": "get_ticket_price",
+    "description": "Get the ticket price for a given city",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "destination_city": {"type": "string", "description": "The city to get the ticket price for"}
         },
-        "required" : ["destination_city"],
-        "additionalProperties" : False,
-    }
+        "required": ["destination_city"],
+        "additionalProperties": False,
+    },
 }
 
 tools = [{"type": "function", "function": price_function}]
 
 
+def handle_tool_call(message):
+    tool_call = message.tool_calls[0]
+    if tool_call.function.name == "get_ticket_price":
+        arguments = json.loads(tool_call.function.arguments)
+        city = arguments.get('destination_city')
+        price_details = get_ticket_price(city)
+        response = {
+            "role": "tool",
+            "content": price_details,
+            "tool_call_id": tool_call.id
+        }
+    return response
+
+
 def message_chat(message, history):
-    history = history or []
-    contents = []
-    for h in history:
-        role = h.get("role", "user") if isinstance(h, dict) else getattr(h, "role", "user")
-        content = h.get("content", "") if isinstance(h, dict) else getattr(h, "content", "")
-        gemini_role = "model" if role == "assistant" else role
-        if gemini_role != "system":
-            contents.append(types.Content(role=gemini_role, parts=[types.Part.from_text(text=content or "")]))
-    contents.append(types.Content(role="user", parts=[types.Part.from_text(text=message or "")]))
-    stream = client.models.generate_content_stream(
-        model="gemini-2.5-flash",
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=system_message,
-            response_mime_type="text/plain",
-        ),
-    )
-    for chunk in stream:
-        text = getattr(chunk, "text", None)
-        if text:
-            yield text
+    print(f"Message: {message}")
+    history = [{"role":h["role"], "content":h["content"]} for h in history]
+    messages = [{"role": "system", "content": system_message}] + history + [{"role": "user", "content": message}]
+    response = client.chat.completions.create(model=MODEL, messages=messages, tools=tools)
+    
+    print(f"Messages: {messages}")
+    
+    if response.choices[0].finish_reason=="tool_calls":
+        message = response.choices[0].message
+        response = handle_tool_call(message)
+        messages.append(message)
+        messages.append(response)
+        response = client.chat.completions.create(model=MODEL, messages=messages)
+
+    return response.choices[0].message.content
 
 
 def run():
-    view = gr.ChatInterface(fn=message_chat, type="messages")
+    view = gr.ChatInterface(fn=message_chat)
     view.launch()
 
 
