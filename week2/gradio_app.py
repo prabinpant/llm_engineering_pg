@@ -3,47 +3,46 @@ import os
 from dotenv import load_dotenv
 import gradio as gr
 from google import genai
+from google.genai import types
 
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-
-def chat(message, history):
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=message,
-    )
-    return response.text
-
 system_message = "You are a helpful assistant that answers questions about LLM engineering."
 
 
-def message_chat(prompt):
+def message_chat(message, history):
+    contents = []
+    for h in history:
+        role = h.get("role", "user") if isinstance(h, dict) else getattr(h, "role", "user")
+        content = h.get("content", "") if isinstance(h, dict) else getattr(h, "content", "")
+        gemini_role = "model" if role == "assistant" else role
+        if gemini_role != "system":
+            contents.append(
+                types.Content(
+                    role=gemini_role,
+                    parts=[types.Part.from_text(text=content or "")],
+                )
+            )
+    user_content = message.get("content", message) if isinstance(message, dict) else (getattr(message, "content", None) or message)
+    contents.append(
+        types.Content(role="user", parts=[types.Part.from_text(text=user_content or "")])
+    )
+    print(contents)
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=prompt,
-        config=genai.types.GenerateContentConfig(
-            system_instruction=system_message,
-        ),
+        contents=contents,
+        config=types.GenerateContentConfig(system_instruction=system_message),
     )
     return response.text
 
-def shout(text):
-    print(f"Shout has been called with input: {text}")
-    return text.upper()
 
 def run():
-    print(shout('test'))
-    
-    message_input = gr.Textbox(label="Your message", info="Enter your prompt", lines=8)
-    message_output = gr.Markdown(label="Assistant")
-    
-    view = gr.Interface(fn=message_chat, inputs=message_input, outputs=message_output, examples=["kowa lowa zowa"], flagging_mode="never")
+    view = gr.ChatInterface(fn=message_chat,type="messages")
     view.launch()
-    # result = message_chat("What are some best practices for prompt engineering?")
-    # print(result) 
- 
+
+
 
 
 if __name__ == "__main__":
