@@ -29,13 +29,14 @@ def message_chat(message, history):
     contents.append(
         types.Content(role="user", parts=[types.Part.from_text(text=user_content or "")])
     )
-    print(contents)
-    response = client.models.generate_content(
+    stream = client.models.generate_content_stream(
         model="gemini-2.5-flash",
         contents=contents,
         config=types.GenerateContentConfig(system_instruction=system_message),
     )
-    return response.text
+    for chunk in stream:
+        if chunk.text:
+            yield chunk.text
 
 
 def run():
