@@ -1,9 +1,12 @@
-"""Week 2 - Gradio Chat App with Google Gemini (OpenAI client)"""
+"""Week 2 - Gradio Chat App with Google Gemini (OpenAI-compatible client)"""
+
 import json
 import os
 from dotenv import load_dotenv
 import gradio as gr
 from openai import OpenAI
+
+# -------------------- Setup --------------------
 
 load_dotenv()
 
@@ -15,15 +18,29 @@ client = OpenAI(
     base_url=GEMINI_BASE_URL,
 )
 
-system_message = "You are a helpful assistant for an Airline called FlightAI. Give short, courteous answers, no more than 1 sentence. Always be accurate. If you dont know the answer, say so."
+system_message = (
+    "You are a helpful assistant for an Airline called FlightAI. "
+    "Give short, courteous answers, no more than 1 sentence. "
+    "If you dont know the answer, say so. "
+    "You have access to the tool get_ticket_price. "
+    "Use it to return the ticket price for a city directly."
+)
 
-ticket_prices = {"New York": 200, "Los Angeles": 300, "Chicago": 250, "Houston": 225, "Miami": 350}
+# -------------------- Data --------------------
 
+ticket_prices = {
+    "New York": 200,
+    "Los Angeles": 300,
+    "Chicago": 250,
+    "Houston": 225,
+    "Miami": 350,
+}
 
-def get_ticket_price(city):
-    print(f"Getting ticket price for {city}")
+# -------------------- Tool --------------------
+
+def get_ticket_price(city: str):
+    print(f"[TOOL] Getting ticket price for {city}")
     return ticket_prices.get(city, "Unknown city")
-
 
 price_function = {
     "name": "get_ticket_price",
@@ -31,53 +48,85 @@ price_function = {
     "parameters": {
         "type": "object",
         "properties": {
-            "destination_city": {"type": "string", "description": "The city to get the ticket price for"}
+            "city": {"type": "string"}
         },
-        "required": ["destination_city"],
+        "required": ["city"],
         "additionalProperties": False,
     },
 }
 
 tools = [{"type": "function", "function": price_function}]
 
+# -------------------- Tool Executor --------------------
 
-def handle_tool_call(message):
-    tool_call = message.tool_calls[0]
-    if tool_call.function.name == "get_ticket_price":
-        arguments = json.loads(tool_call.function.arguments)
-        city = arguments.get('destination_city')
-        price_details = get_ticket_price(city)
-        response = {
+def handle_tool_calls(msg):
+    responses = []
+
+    for tc in msg.tool_calls:
+        args = json.loads(tc.function.arguments)
+        result = get_ticket_price(args["city"])
+
+        responses.append({
             "role": "tool",
-            "content": price_details,
-            "tool_call_id": tool_call.id
-        }
-    return response
+            "tool_call_id": tc.id,
+            "content": str(result),
+        })
 
+    return responses
+
+# -------------------- Chat Handler --------------------
 
 def message_chat(message, history):
-    print(f"Message: {message}")
-    history = [{"role":h["role"], "content":h["content"]} for h in history]
-    messages = [{"role": "system", "content": system_message}] + history + [{"role": "user", "content": message}]
-    response = client.chat.completions.create(model=MODEL, messages=messages, tools=tools)
-    
-    print(f"Messages: {messages}")
-    
-    if response.choices[0].finish_reason=="tool_calls":
-        message = response.choices[0].message
-        response = handle_tool_call(message)
-        messages.append(message)
-        messages.append(response)
-        response = client.chat.completions.create(model=MODEL, messages=messages)
+    messages = [{"role": "system", "content": system_message}]
+
+    # ✅ SAFE history handling (works for all Gradio versions)
+    for h in history or []:
+        if isinstance(h, (list, tuple)) and len(h) == 2:
+            messages.append({"role": "user", "content": h[0]})
+            messages.append({"role": "assistant", "content": h[1]})
+        elif isinstance(h, dict):
+            messages.append({
+                "role": h.get("role", "user"),
+                "content": h.get("content", "")
+            })
+
+    messages.append({"role": "user", "content": message})
+
+    # First LLM call
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        tools=tools,
+        tool_choice="auto",
+    )
+
+    choice = response.choices[0]
+
+    # Tool call path
+    if choice.finish_reason == "tool_calls":
+        messages.append({
+            "role": "assistant",
+            "tool_calls": choice.message.tool_calls,
+        })
+
+        messages.extend(handle_tool_calls(choice.message))
+
+        # Second LLM call (tool results)
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+        )
 
     return response.choices[0].message.content
 
+# -------------------- UI --------------------
 
 def run():
-    view = gr.ChatInterface(fn=message_chat)
-    view.launch()
-
-
+    gr.ChatInterface(
+        fn=message_chat,
+        title="✈️ FlightAI",
+        description="Ask for ticket prices by city",
+    ).launch()
 
 if __name__ == "__main__":
     run()
